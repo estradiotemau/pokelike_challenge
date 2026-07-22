@@ -1,9 +1,16 @@
 import streamlit as st
 import requests
 import itertools
+import time
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
 
 # ==========================================
-# 1. O NOSSO MOTOR DE BUSCA
+# 1. MOTOR DE BUSCA (PokéAPI)
 # ==========================================
 def pegar_ficha_pokemon(nome):
     nome = nome.lower().strip()
@@ -39,7 +46,7 @@ def pegar_ficha_pokemon(nome):
         return f"Erro ao buscar {nome}"
 
 # ==========================================
-# 2. AS REGRAS MATEMÁTICAS
+# 2. REGRAS DO JOGO
 # ==========================================
 SUPER_EFETIVO = {
     'normal': [], 'fire': ['grass', 'ice', 'bug', 'steel'], 'water': ['fire', 'ground', 'rock'],
@@ -64,7 +71,7 @@ REGRAS_DISPONIVEIS = {
 }
 
 # ==========================================
-# 3. O CÉREBRO (RESOLUTOR)
+# 3. O RESOLUTOR
 # ==========================================
 def resolver_puzzle(nomes_pokemons, regras_escolhidas):
     fichas = []
@@ -88,48 +95,92 @@ def resolver_puzzle(nomes_pokemons, regras_escolhidas):
     return None, "Nenhuma combinação bateu."
 
 # ==========================================
-# 4. A INTERFACE GRÁFICA (O SITE)
+# 4. O ROBÔ RASPADOR (COM CACHE DIÁRIO!)
+# ttl="1d" significa que ele só raspa 1 vez por dia e guarda na memória!
 # ==========================================
+@st.cache_data(ttl="1d", show_spinner=False)
+def buscar_desafio_automatico():
+    options = Options()
+    options.add_argument('--headless=new')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
+    
+    try:
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+        
+        driver.get("https://pokelike.xyz/")
+        time.sleep(3)
+        
+        botao_diario = driver.find_element(By.XPATH, "//*[contains(text(), 'DAILY') or contains(text(), 'Daily')]")
+        botao_diario.click()
+        time.sleep(3)
+        
+        sopa = BeautifulSoup(driver.page_source, 'html.parser')
+        
+        pokemons = [img['alt'].lower() for img in sopa.find_all('img', class_='pc-sprite') if 'alt' in img.attrs and img['alt']]
+        regras = [label.get_text(strip=True).upper().replace(">", " >").replace("<", " <").replace("=", " =").replace("  ", " ").strip() for label in sopa.find_all('span', class_='pc-link-label')]
+        
+        driver.quit()
+        return pokemons[:6], regras[:5]
+    except Exception as e:
+        return None, None
 
-# Configurações da página
-st.set_page_config(page_title="PokéSort Solver", page_icon="🎮", layout="centered")
+# ==========================================
+# 5. A INTERFACE GRÁFICA (O SITE)
+# ==========================================
+st.set_page_config(page_title="PokéSort Auto-Solver", page_icon="🤖", layout="centered")
 
-st.title("🏆 PokéSort Solver")
-st.write("Digite os 6 Pokémon misturados e escolha as regras para encontrar a ordem correta!")
-
-# Criando 6 colunas para digitar os nomes dos Pokémon
-st.subheader("1. Digite os Pokémon da tela:")
-colunas_poke = st.columns(6)
-pokemons = []
-for i in range(6):
-    with colunas_poke[i]:
-        poke = st.text_input(f"Poke {i+1}", key=f"p_{i}")
-        pokemons.append(poke)
-
-# Criando 5 colunas para escolher as regras
-st.subheader("2. Escolha as regras (os links):")
-colunas_regras = st.columns(5)
-regras = []
-opcoes_regras = list(REGRAS_DISPONIVEIS.keys())
-
-for i in range(5):
-    with colunas_regras[i]:
-        regra = st.selectbox(f"Link {i+1}", opcoes_regras, key=f"r_{i}")
-        regras.append(regra)
+st.title("🏆 PokéSort Auto-Solver")
+st.write("Um bot criado para obliterar o desafio diário do Pokelike.")
 
 st.divider()
 
-# O Botão Mágico
-if st.button("🪄 Resolver Puzzle!", use_container_width=True):
-    # Verifica se os 6 campos foram preenchidos
-    if all(pokemons):
-        with st.spinner("Analisando 720 possibilidades..."):
-            resultado, mensagem = resolver_puzzle(pokemons, regras)
+st.subheader("🤖 Solução Automática do Dia")
+if st.button("🪄 Hackear o Desafio de Hoje", type="primary", use_container_width=True):
+    with st.spinner("Acordando o robô e raspando o site... (pode demorar uns 10 segs na primeira vez do dia)"):
+        pokes_dia, regras_dia = buscar_desafio_automatico()
+        
+        if pokes_dia and regras_dia:
+            st.success(f"Dados obtidos! Pokémons: {', '.join(pokes_dia).title()} | Regras: {', '.join(regras_dia)}")
             
+            with st.spinner("Calculando 720 possibilidades..."):
+                resultado, mensagem = resolver_puzzle(pokes_dia, regras_dia)
+                
+                if resultado:
+                    st.success("🎉 ORDEM PERFEITA ENCONTRADA:")
+                    st.info(" ➔ ".join(resultado))
+                else:
+                    st.error("Erro ao resolver o puzzle com os dados raspados.")
+        else:
+            st.error("O robô falhou em ler o site hoje. Tente usar o modo manual abaixo.")
+
+st.divider()
+
+# Mantemos a opção manual como backup!
+with st.expander("🛠️ Ou preencha manualmente (Modo Backup)"):
+    colunas_poke = st.columns(6)
+    pokemons = []
+    for i in range(6):
+        with colunas_poke[i]:
+            poke = st.text_input(f"Poke {i+1}", key=f"p_{i}")
+            pokemons.append(poke)
+
+    colunas_regras = st.columns(5)
+    regras = []
+    opcoes_regras = list(REGRAS_DISPONIVEIS.keys())
+
+    for i in range(5):
+        with colunas_regras[i]:
+            regra = st.selectbox(f"Link {i+1}", opcoes_regras, key=f"r_{i}")
+            regras.append(regra)
+
+    if st.button("Resolver Manualmente"):
+        if all(pokemons):
+            resultado, mensagem = resolver_puzzle(pokemons, regras)
             if resultado:
-                st.success("Encontramos a ordem perfeita!")
-                st.info(" ➔ ".join(resultado))
+                st.success(" ➔ ".join(resultado))
             else:
                 st.error(mensagem)
-    else:
-        st.warning("Por favor, preencha o nome dos 6 Pokémon antes de clicar.")
