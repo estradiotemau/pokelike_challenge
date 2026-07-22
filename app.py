@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import itertools
 import time
+from datetime import datetime, timedelta, timezone
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -95,10 +96,10 @@ def resolver_puzzle(nomes_pokemons, regras_escolhidas):
     return None, "Nenhuma combinação bateu."
 
 # ==========================================
-# 4. O ROBÔ RASPADOR (DEBUG + CACHE)
+# 4. O ROBÔ RASPADOR (CACHE POR DATA)
 # ==========================================
-@st.cache_data(ttl="1d", show_spinner=False)
-def buscar_desafio_automatico():
+@st.cache_data(show_spinner=False)
+def buscar_desafio_automatico(data_str):
     options = Options()
     options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
@@ -108,12 +109,10 @@ def buscar_desafio_automatico():
     
     try:
         try:
-            # Caminho nativo do Streamlit Cloud (via packages.txt)
             service = Service('/usr/bin/chromedriver')
             options.binary_location = '/usr/bin/chromium'
             driver = webdriver.Chrome(service=service, options=options)
         except:
-            # Fallback seguro
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=options)
         
@@ -148,9 +147,13 @@ st.write("Um bot criado para obliterar o desafio diário do Pokelike.")
 st.divider()
 
 st.subheader("🤖 Solução Automática do Dia")
+
+fuso_brasil = timezone(timedelta(hours=-3))
+data_hoje_br = datetime.now(fuso_brasil).strftime("%Y-%m-%d")
+
 if st.button("🪄 Hackear o Desafio de Hoje", type="primary", use_container_width=True):
     with st.spinner("Acordando o robô e raspando o site... (pode demorar uns 10 segs na primeira vez do dia)"):
-        pokes_dia, regras_dia, mensagem_robo = buscar_desafio_automatico()
+        pokes_dia, regras_dia, mensagem_robo = buscar_desafio_automatico(data_hoje_br)
         
         if pokes_dia and regras_dia:
             st.success(f"Dados obtidos! Pokémons: {', '.join(pokes_dia).title()} | Regras: {', '.join(regras_dia)}")
@@ -165,7 +168,7 @@ if st.button("🪄 Hackear o Desafio de Hoje", type="primary", use_container_wid
                     st.error("Erro ao resolver o puzzle com os dados raspados.")
         else:
             st.error("O robô falhou em ler o site hoje.")
-            st.code(mensagem_robo) # Se der erro no Streamlit, o erro vai aparecer aqui!
+            st.code(mensagem_robo)
 
 st.divider()
 
