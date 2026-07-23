@@ -11,40 +11,80 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 
 # ==========================================
-# 1. MOTOR DE BUSCA (PokéAPI)
+# 1. MOTOR DE BUSCA (PokéAPI TURBINADO)
 # ==========================================
-def pegar_ficha_pokemon(nome):
-    nome = nome.lower().strip()
+def pegar_ficha_pokemon(nome_original):
+    nome = nome_original.lower().strip()
+    
+    # Limpa pontuações que quebram a API (ex: Mr. Mime -> mr-mime)
+    nome_limpo = nome.replace(" ", "-").replace(".", "").replace("'", "").replace(":", "").replace("é", "e")
+    
+    # Dicionário salva-vidas para Pokémon com formas problemáticas
+    mapa_formas = {
+        "wormadam": "wormadam-plant",
+        "deoxys": "deoxys-normal",
+        "giratina": "giratina-altered",
+        "shaymin": "shaymin-land",
+        "basculin": "basculin-red-striped",
+        "darmanitan": "darmanitan-standard",
+        "tornadus": "tornadus-incarnate",
+        "thundurus": "thundurus-incarnate",
+        "landorus": "landorus-incarnate",
+        "keldeo": "keldeo-ordinary",
+        "meloetta": "meloetta-aria",
+        "aegislash": "aegislash-shield",
+        "pumpkaboo": "pumpkaboo-average",
+        "gourgeist": "gourgeist-average",
+        "oricorio": "oricorio-baile",
+        "lycanroc": "lycanroc-midday",
+        "wishiwashi": "wishiwashi-solo",
+        "minior": "minior-red-meteor",
+        "mimikyu": "mimikyu-disguised",
+        "toxtricity": "toxtricity-amped",
+        "eiscue": "eiscue-ice",
+        "morpeko": "morpeko-full-belly",
+        "urshifu": "urshifu-single-strike"
+    }
+    
+    nome_api = mapa_formas.get(nome_limpo, nome_limpo)
+    
     try:
-        url_principal = f"https://pokeapi.co/api/v2/pokemon/{nome}"
-        resposta_principal = requests.get(url_principal).json()
-        tipos = [tipo['type']['name'] for tipo in resposta_principal['types']]
+        # Busca Tipos (precisa do nome com a forma específica)
+        url_principal = f"https://pokeapi.co/api/v2/pokemon/{nome_api}"
+        resposta_principal = requests.get(url_principal)
+        if resposta_principal.status_code != 200:
+            return f"PokéAPI não encontrou o Pokémon: {nome_api}"
+        tipos = [tipo['type']['name'] for tipo in resposta_principal.json()['types']]
         
-        url_especie = f"https://pokeapi.co/api/v2/pokemon-species/{nome}"
-        resposta_especie = requests.get(url_especie).json()
-        
-        geracao_romana = resposta_especie['generation']['name'].split('-')[1]
+        # Busca Geração (precisa do nome base da espécie)
+        url_especie = f"https://pokeapi.co/api/v2/pokemon-species/{nome_limpo}"
+        resposta_especie = requests.get(url_especie)
+        if resposta_especie.status_code != 200:
+            return f"PokéAPI não encontrou a espécie: {nome_limpo}"
+            
+        dados_especie = resposta_especie.json()
+        geracao_romana = dados_especie['generation']['name'].split('-')[1]
         tabela_geracoes = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9}
         geracao = tabela_geracoes.get(geracao_romana, 0)
         
-        url_evolucao = resposta_especie['evolution_chain']['url']
-        resposta_evolucao = requests.get(url_evolucao).json()
-        cadeia = resposta_evolucao['chain']
+        # Busca Cadeia de Evolução
+        url_evolucao = dados_especie['evolution_chain']['url']
+        cadeia = requests.get(url_evolucao).json()['chain']
         
         estagio = 0
-        if cadeia['species']['name'] != nome:
+        if cadeia['species']['name'] != nome_limpo:
             for evolucao1 in cadeia['evolves_to']:
-                if evolucao1['species']['name'] == nome:
+                if evolucao1['species']['name'] == nome_limpo:
                     estagio = 1
                     break
                 for evolucao2 in evolucao1['evolves_to']:
-                    if evolucao2['species']['name'] == nome:
+                    if evolucao2['species']['name'] == nome_limpo:
                         estagio = 2
                         break
 
-        return {"Nome": nome.capitalize(), "Tipos": tipos, "Geracao": geracao, "Estagio": estagio}
+        return {"Nome": nome_original.capitalize(), "Tipos": tipos, "Geracao": geracao, "Estagio": estagio}
     except Exception as e:
-        return f"Erro ao buscar {nome}"
+        return f"Erro desconhecido ao processar {nome_original}: {str(e)}"
 
 # ==========================================
 # 2. REGRAS DO JOGO
@@ -79,7 +119,7 @@ def resolver_puzzle(nomes_pokemons, regras_escolhidas):
     for nome in nomes_pokemons:
         ficha = pegar_ficha_pokemon(nome)
         if isinstance(ficha, str):
-            return None, ficha
+            return None, ficha # Aqui ele devolve a mensagem exata de erro da PokeAPI
         fichas.append(ficha)
         
     todas_as_ordens = list(itertools.permutations(fichas))
@@ -93,10 +133,10 @@ def resolver_puzzle(nomes_pokemons, regras_escolhidas):
         if deu_match:
             return [p['Nome'] for p in ordem], "Sucesso"
             
-    return None, "Nenhuma combinação bateu."
+    return None, "A PokéAPI buscou todos os dados, mas nenhuma combinação resolveu as regras."
 
 # ==========================================
-# 4. O ROBÔ RASPADOR (CACHE POR DATA)
+# 4. O ROBÔ RASPADOR
 # ==========================================
 @st.cache_data(show_spinner=False)
 def buscar_desafio_automatico(data_str):
@@ -165,7 +205,8 @@ if st.button("🪄 Hackear o Desafio de Hoje", type="primary", use_container_wid
                     st.success("🎉 ORDEM PERFEITA ENCONTRADA:")
                     st.info(" ➔ ".join(resultado))
                 else:
-                    st.error("Erro ao resolver o puzzle com os dados raspados.")
+                    # AGORA SIM ELE GRITA O MOTIVO EXATO!
+                    st.error(f"Erro ao resolver: {mensagem_puzzle}")
         else:
             st.error("O robô falhou em ler o site hoje.")
             st.code(mensagem_robo)
@@ -193,7 +234,6 @@ with st.expander("🛠️ Ou preencha manualmente (Modo Backup)"):
         if all(pokemons_manual):
             resultado, mensagem = resolver_puzzle(pokemons_manual, regras_manual)
             if resultado:
-                st.success("🎉 ORDEM PERFEITA ENCONTRADA:")
-                st.info(" ➔ ".join(resultado))
+                st.success(" ➔ ".join(resultado))
             else:
-                st.error(f"Erro ao resolver: {mensagem_puzzle}")
+                st.error(mensagem)
