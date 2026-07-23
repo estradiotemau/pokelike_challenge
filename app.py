@@ -193,6 +193,7 @@ with st.expander("🛠️ Ou preencha manualmente (Modo Backup)"):
         if all(pokemons_manual):
             resultado, mensagem = resolver_puzzle(pokemons_manual, regras_manual)
             if resultado:
-                st.success(" ➔ ".join(resultado))
+                st.success("🎉 ORDEM PERFEITA ENCONTRADA:")
+                st.info(" ➔ ".join(resultado))
             else:
-                st.error(mensagem)
+                st.error(f"Erro ao resolver: {mensagem_puzzle}")
