@@ -16,62 +16,47 @@ from selenium.webdriver.common.by import By
 def pegar_ficha_pokemon(nome_original):
     nome = nome_original.lower().strip()
     
-    # Limpa pontuações que quebram a API (ex: Mr. Mime -> mr-mime)
+    # Limpa pontuações que quebram a API
     nome_limpo = nome.replace(" ", "-").replace(".", "").replace("'", "").replace(":", "").replace("é", "e")
     
     # Dicionário salva-vidas para Pokémon com formas problemáticas
     mapa_formas = {
-        "wormadam": "wormadam-plant",
-        "deoxys": "deoxys-normal",
-        "giratina": "giratina-altered",
-        "shaymin": "shaymin-land",
-        "basculin": "basculin-red-striped",
-        "darmanitan": "darmanitan-standard",
-        "tornadus": "tornadus-incarnate",
-        "thundurus": "thundurus-incarnate",
-        "landorus": "landorus-incarnate",
-        "keldeo": "keldeo-ordinary",
-        "meloetta": "meloetta-aria",
-        "aegislash": "aegislash-shield",
-        "pumpkaboo": "pumpkaboo-average",
-        "gourgeist": "gourgeist-average",
-        "oricorio": "oricorio-baile",
-        "lycanroc": "lycanroc-midday",
-        "wishiwashi": "wishiwashi-solo",
-        "minior": "minior-red-meteor",
-        "mimikyu": "mimikyu-disguised",
-        "toxtricity": "toxtricity-amped",
-        "eiscue": "eiscue-ice",
-        "morpeko": "morpeko-full-belly",
-        "urshifu": "urshifu-single-strike"
+        "wormadam": "wormadam-plant", "deoxys": "deoxys-normal", "giratina": "giratina-altered",
+        "shaymin": "shaymin-land", "basculin": "basculin-red-striped", "darmanitan": "darmanitan-standard",
+        "tornadus": "tornadus-incarnate", "thundurus": "thundurus-incarnate", "landorus": "landorus-incarnate",
+        "keldeo": "keldeo-ordinary", "meloetta": "meloetta-aria", "aegislash": "aegislash-shield",
+        "pumpkaboo": "pumpkaboo-average", "gourgeist": "gourgeist-average", "oricorio": "oricorio-baile",
+        "lycanroc": "lycanroc-midday", "wishiwashi": "wishiwashi-solo", "minior": "minior-red-meteor",
+        "mimikyu": "mimikyu-disguised", "toxtricity": "toxtricity-amped", "eiscue": "eiscue-ice",
+        "morpeko": "morpeko-full-belly", "urshifu": "urshifu-single-strike"
     }
     
     nome_api = mapa_formas.get(nome_limpo, nome_limpo)
     
     try:
-        # Busca Tipos (precisa do nome com a forma específica)
+        # Busca Tipos e Imagem
         url_principal = f"https://pokeapi.co/api/v2/pokemon/{nome_api}"
         resposta_principal = requests.get(url_principal)
         if resposta_principal.status_code != 200:
             return f"PokéAPI não encontrou o Pokémon: {nome_api}"
-        tipos = [tipo['type']['name'] for tipo in resposta_principal.json()['types']]
+            
+        dados_principais = resposta_principal.json()
+        tipos = [tipo['type']['name'] for tipo in dados_principais['types']]
+        imagem_url = dados_principais['sprites']['front_default']
         
-        # Busca Geração E COR (precisa do nome base da espécie)
+        # Busca Geração, Cor e Evolução
         url_especie = f"https://pokeapi.co/api/v2/pokemon-species/{nome_limpo}"
         resposta_especie = requests.get(url_especie)
         if resposta_especie.status_code != 200:
             return f"PokéAPI não encontrou a espécie: {nome_limpo}"
             
         dados_especie = resposta_especie.json()
-        
-        # --- AQUI PEGAMOS A COR! ---
         cor = dados_especie['color']['name']
         
         geracao_romana = dados_especie['generation']['name'].split('-')[1]
         tabela_geracoes = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9}
         geracao = tabela_geracoes.get(geracao_romana, 0)
         
-        # Busca Cadeia de Evolução
         url_evolucao = dados_especie['evolution_chain']['url']
         cadeia = requests.get(url_evolucao).json()['chain']
         
@@ -86,12 +71,19 @@ def pegar_ficha_pokemon(nome_original):
                         estagio = 2
                         break
 
-        return {"Nome": nome_original.capitalize(), "Tipos": tipos, "Geracao": geracao, "Estagio": estagio, "Cor": cor}
+        return {
+            "Nome": nome_original.capitalize(),
+            "Tipos": tipos,
+            "Geracao": geracao,
+            "Estagio": estagio,
+            "Cor": cor,
+            "Imagem": imagem_url
+        }
     except Exception as e:
         return f"Erro desconhecido ao processar {nome_original}: {str(e)}"
 
 # ==========================================
-# 2. REGRAS DO JOGO
+# 2. REGRAS DO JOGO E ÍCONES
 # ==========================================
 SUPER_EFETIVO = {
     'normal': [], 'fire': ['grass', 'ice', 'bug', 'steel'], 'water': ['fire', 'ground', 'rock'],
@@ -111,9 +103,24 @@ REGRAS_DISPONIVEIS = {
     "STAGE <": lambda p1, p2: p1['Estagio'] < p2['Estagio'],
     "STAGE =": lambda p1, p2: p1['Estagio'] == p2['Estagio'],
     "TYPE =": lambda p1, p2: bool(set(p1['Tipos']) & set(p2['Tipos'])),
-    "COLOUR =": lambda p1, p2: p1['Cor'] == p2['Cor'],  # --- REGRA DA COR INSERIDA AQUI! ---
+    "COLOR =": lambda p1, p2: p1['Cor'] == p2['Cor'],
+    "COLOUR =": lambda p1, p2: p1['Cor'] == p2['Cor'],
     "BEATS >": lambda p1, p2: any(tipo in SUPER_EFETIVO.get(p1['Tipos'][0], []) for tipo in p2['Tipos']),
     "BEATS <": lambda p1, p2: any(tipo in SUPER_EFETIVO.get(p2['Tipos'][0], []) for tipo in p1['Tipos'])
+}
+
+ICONES_REGRAS = {
+    "GEN >": "📘",
+    "GEN <": "📘",
+    "GEN =": "📘",
+    "STAGE >": "🍬",
+    "STAGE <": "🍬",
+    "STAGE =": "🍬",
+    "TYPE =": "🧬",
+    "COLOR =": "🎨",
+    "COLOUR =": "🎨",
+    "BEATS >": "🥊",
+    "BEATS <": "🥊"
 }
 
 # ==========================================
@@ -124,7 +131,7 @@ def resolver_puzzle(nomes_pokemons, regras_escolhidas):
     for nome in nomes_pokemons:
         ficha = pegar_ficha_pokemon(nome)
         if isinstance(ficha, str):
-            return None, ficha # Aqui ele devolve a mensagem exata de erro da PokeAPI
+            return None, ficha
         fichas.append(ficha)
         
     todas_as_ordens = list(itertools.permutations(fichas))
@@ -136,7 +143,8 @@ def resolver_puzzle(nomes_pokemons, regras_escolhidas):
                 deu_match = False
                 break 
         if deu_match:
-            return [p['Nome'] for p in ordem], "Sucesso"
+            # Retorna a ficha completa (com foto e tudo) em vez de só o nome
+            return list(ordem), "Sucesso"
             
     return None, "A PokéAPI buscou todos os dados, mas nenhuma combinação resolveu as regras."
 
@@ -182,22 +190,70 @@ def buscar_desafio_automatico(data_str):
         return None, None, f"Erro detalhado: {str(e)}"
 
 # ==========================================
-# 5. A INTERFACE GRÁFICA (O SITE)
+# 5. DESENHISTA DA INTERFACE
+# ==========================================
+def desenhar_resultado(resultado, regras):
+    st.success("🎉 ORDEM PERFEITA ENCONTRADA:")
+    
+    # CSS injetado para a caixa verde neon estilo o jogo original
+    st.markdown("""
+        <style>
+        .poke-box {
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            background-color: #1E1E2E;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+        .poke-name {
+            font-weight: bold;
+            color: white;
+            font-size: 14px;
+            margin-top: -10px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 1. Desenha a linha dos Pokémon
+    cols = st.columns(6)
+    for i, pokemon in enumerate(resultado):
+        with cols[i]:
+            st.markdown(f"""
+                <div class="poke-box">
+                    <img src="{pokemon['Imagem']}" width="100%">
+                    <div class="poke-name">{pokemon['Nome']}</div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    # 2. Desenha a linha das Regras (emojis conectando)
+    cols_regras = st.columns(6)
+    for i in range(5):
+        with cols_regras[i]:
+            regra = regras[i]
+            icone = ICONES_REGRAS.get(regra, "🔗")
+            st.markdown(f"""
+                <div style="text-align: right; padding-top: 5px;">
+                    <div style="font-size: 26px;">{icone}</div>
+                    <div style="font-size: 13px; color: #4CAF50; font-weight: bold; margin-top: -5px;">{regra}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+# ==========================================
+# 6. O SITE PRINCIPAL
 # ==========================================
 st.set_page_config(page_title="PokéSort Auto-Solver", page_icon="🤖", layout="centered")
 
 st.title("🏆 PokéSort Auto-Solver")
 st.write("Um bot criado para obliterar o desafio diário do Pokelike.")
-
 st.divider()
-
 st.subheader("🤖 Solução Automática do Dia")
 
 fuso_brasil = timezone(timedelta(hours=-3))
 data_hoje_br = datetime.now(fuso_brasil).strftime("%Y-%m-%d")
 
 if st.button("🪄 Hackear o Desafio de Hoje", type="primary", use_container_width=True):
-    with st.spinner("Acordando o robô e raspando o site... (pode demorar uns 10 segs na primeira vez do dia)"):
+    with st.spinner("Acordando o robô e raspando o site... (pode demorar uns 10 segs)"):
         pokes_dia, regras_dia, mensagem_robo = buscar_desafio_automatico(data_hoje_br)
         
         if pokes_dia and regras_dia:
@@ -207,10 +263,8 @@ if st.button("🪄 Hackear o Desafio de Hoje", type="primary", use_container_wid
                 resultado, mensagem_puzzle = resolver_puzzle(pokes_dia, regras_dia)
                 
                 if resultado:
-                    st.success("🎉 ORDEM PERFEITA ENCONTRADA:")
-                    st.info(" ➔ ".join(resultado))
+                    desenhar_resultado(resultado, regras_dia)
                 else:
-                    # AGORA SIM ELE GRITA O MOTIVO EXATO!
                     st.error(f"Erro ao resolver: {mensagem_puzzle}")
         else:
             st.error("O robô falhou em ler o site hoje.")
@@ -237,8 +291,11 @@ with st.expander("🛠️ Ou preencha manualmente (Modo Backup)"):
 
     if st.button("Resolver Manualmente"):
         if all(pokemons_manual):
-            resultado, mensagem = resolver_puzzle(pokemons_manual, regras_manual)
-            if resultado:
-                st.success(" ➔ ".join(resultado))
-            else:
-                st.error(mensagem)
+            with st.spinner("Buscando dados e resolvendo..."):
+                resultado, mensagem = resolver_puzzle(pokemons_manual, regras_manual)
+                if resultado:
+                    desenhar_resultado(resultado, regras_manual)
+                else:
+                    st.error(mensagem)
+        else:
+            st.warning("Preencha o nome dos 6 Pokémon primeiro!")
