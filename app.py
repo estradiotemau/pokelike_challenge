@@ -56,13 +56,17 @@ def pegar_ficha_pokemon(nome_original):
             return f"PokéAPI não encontrou o Pokémon: {nome_api}"
         tipos = [tipo['type']['name'] for tipo in resposta_principal.json()['types']]
         
-        # Busca Geração (precisa do nome base da espécie)
+        # Busca Geração E COR (precisa do nome base da espécie)
         url_especie = f"https://pokeapi.co/api/v2/pokemon-species/{nome_limpo}"
         resposta_especie = requests.get(url_especie)
         if resposta_especie.status_code != 200:
             return f"PokéAPI não encontrou a espécie: {nome_limpo}"
             
         dados_especie = resposta_especie.json()
+        
+        # --- AQUI PEGAMOS A COR! ---
+        cor = dados_especie['color']['name']
+        
         geracao_romana = dados_especie['generation']['name'].split('-')[1]
         tabela_geracoes = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9}
         geracao = tabela_geracoes.get(geracao_romana, 0)
@@ -82,7 +86,7 @@ def pegar_ficha_pokemon(nome_original):
                         estagio = 2
                         break
 
-        return {"Nome": nome_original.capitalize(), "Tipos": tipos, "Geracao": geracao, "Estagio": estagio}
+        return {"Nome": nome_original.capitalize(), "Tipos": tipos, "Geracao": geracao, "Estagio": estagio, "Cor": cor}
     except Exception as e:
         return f"Erro desconhecido ao processar {nome_original}: {str(e)}"
 
@@ -107,6 +111,7 @@ REGRAS_DISPONIVEIS = {
     "STAGE <": lambda p1, p2: p1['Estagio'] < p2['Estagio'],
     "STAGE =": lambda p1, p2: p1['Estagio'] == p2['Estagio'],
     "TYPE =": lambda p1, p2: bool(set(p1['Tipos']) & set(p2['Tipos'])),
+    "COLOR =": lambda p1, p2: p1['Cor'] == p2['Cor'],  # --- REGRA DA COR INSERIDA AQUI! ---
     "BEATS >": lambda p1, p2: any(tipo in SUPER_EFETIVO.get(p1['Tipos'][0], []) for tipo in p2['Tipos']),
     "BEATS <": lambda p1, p2: any(tipo in SUPER_EFETIVO.get(p2['Tipos'][0], []) for tipo in p1['Tipos'])
 }
