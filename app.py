@@ -111,7 +111,7 @@ REGRAS_DISPONIVEIS = {
     "STAGE <": lambda p1, p2: p1['Estagio'] < p2['Estagio'],
     "STAGE =": lambda p1, p2: p1['Estagio'] == p2['Estagio'],
     "TYPE =": lambda p1, p2: bool(set(p1['Tipos']) & set(p2['Tipos'])),
-    "COLOR =": lambda p1, p2: p1['Cor'] == p2['Cor'],  # --- REGRA DA COR INSERIDA AQUI! ---
+    "COLOUR =": lambda p1, p2: p1['Cor'] == p2['Cor'],  # --- REGRA DA COR INSERIDA AQUI! ---
     "BEATS >": lambda p1, p2: any(tipo in SUPER_EFETIVO.get(p1['Tipos'][0], []) for tipo in p2['Tipos']),
     "BEATS <": lambda p1, p2: any(tipo in SUPER_EFETIVO.get(p2['Tipos'][0], []) for tipo in p1['Tipos'])
 }
