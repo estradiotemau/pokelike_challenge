@@ -242,10 +242,10 @@ def desenhar_resultado(resultado, regras):
 # ==========================================
 # 6. O SITE PRINCIPAL
 # ==========================================
-st.set_page_config(page_title="PokéSort Auto-Solver", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="PokeSort Auto-Solver", page_icon="🤖", layout="centered")
 
-st.title("🏆 PokéSort Auto-Solver")
-st.write("Um bot criado para obliterar o desafio diário do Pokelike.")
+st.title("🏆 PokeSort Auto-Solver")
+st.write("Um bot criado para resolver o desafio diário do Pokelike.")
 st.divider()
 st.subheader("🤖 Solução Automática do Dia")
 
